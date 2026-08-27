@@ -1,6 +1,5 @@
 """Elementwise affine error-propagation kernels exposed through a C ABI."""
 
-from std.algorithm import parallelize
 from std.ffi import external_call
 from std.math import (
     abs,
@@ -28,8 +27,8 @@ from std.math import (
 )
 from std.sys.info import num_physical_cores
 
-comptime FPtr = UnsafePointer[Float64, AnyOrigin[mut=True]]
-comptime IPtr = UnsafePointer[Int64, AnyOrigin[mut=True]]
+comptime FPtr = Pointer[Float64, AnyOrigin[mut=True]]
+comptime IPtr = Pointer[Int64, AnyOrigin[mut=True]]
 comptime PARALLEL_THRESHOLD = 131_072
 comptime PI_OVER_180 = 0.017453292519943295
 comptime INV_PI_OVER_180 = 57.29577951308232
@@ -206,18 +205,21 @@ def munc_binary(
     var db = fp(db_addr)
     var workers = worker_count(n)
 
-    @parameter
+    @__parameter
     def process(worker: Int):
         var start = worker * n // workers
         var end = (worker + 1) * n // workers
         for i in range(start, end):
-            var point = binary_point(op, a[i], b[i])
-            values[i] = point[0]
-            da[i] = point[1]
-            db[i] = point[2]
+            var point = binary_point(
+                op, a[unsafe_offset=i], b[unsafe_offset=i]
+            )
+            values[unsafe_offset=i] = point[0]
+            da[unsafe_offset=i] = point[1]
+            db[unsafe_offset=i] = point[2]
 
     if workers > 1:
-        parallelize[process](workers, workers)
+        for worker in range(workers):
+            process(worker)
     else:
         process(0)
 
@@ -235,17 +237,18 @@ def munc_unary(
     var derivative = fp(derivative_addr)
     var workers = worker_count(n)
 
-    @parameter
+    @__parameter
     def process(worker: Int):
         var start = worker * n // workers
         var end = (worker + 1) * n // workers
         for i in range(start, end):
-            var point = unary_point(op, x[i])
-            values[i] = point[0]
-            derivative[i] = point[1]
+            var point = unary_point(op, x[unsafe_offset=i])
+            values[unsafe_offset=i] = point[0]
+            derivative[unsafe_offset=i] = point[1]
 
     if workers > 1:
-        parallelize[process](workers, workers)
+        for worker in range(workers):
+            process(worker)
     else:
         process(0)
 
@@ -266,15 +269,19 @@ def munc_chain_binary(
     var destination = fp(dst_addr)
     var workers = worker_count(n)
 
-    @parameter
+    @__parameter
     def process(worker: Int):
         var start = worker * n // workers
         var end = (worker + 1) * n // workers
         for i in range(start, end):
-            destination[i] = da[i] * ga[i] + db[i] * gb[i]
+            destination[unsafe_offset=i] = (
+                da[unsafe_offset=i] * ga[unsafe_offset=i]
+                + db[unsafe_offset=i] * gb[unsafe_offset=i]
+            )
 
     if workers > 1:
-        parallelize[process](workers, workers)
+        for worker in range(workers):
+            process(worker)
     else:
         process(0)
 
@@ -291,15 +298,18 @@ def munc_chain_unary(
     var destination = fp(dst_addr)
     var workers = worker_count(n)
 
-    @parameter
+    @__parameter
     def process(worker: Int):
         var start = worker * n // workers
         var end = (worker + 1) * n // workers
         for i in range(start, end):
-            destination[i] = local[i] * gradient[i]
+            destination[unsafe_offset=i] = (
+                local[unsafe_offset=i] * gradient[unsafe_offset=i]
+            )
 
     if workers > 1:
-        parallelize[process](workers, workers)
+        for worker in range(workers):
+            process(worker)
     else:
         process(0)
 
@@ -316,16 +326,19 @@ def munc_variance_diag(
     var variance = fp(variance_addr)
     var workers = worker_count(n)
 
-    @parameter
+    @__parameter
     def process(worker: Int):
         var start = worker * n // workers
         var end = (worker + 1) * n // workers
         for i in range(start, end):
-            var contribution = gradient[i] * sigma[i]
-            variance[i] += contribution * contribution
+            var contribution = (
+                gradient[unsafe_offset=i] * sigma[unsafe_offset=i]
+            )
+            variance[unsafe_offset=i] += contribution * contribution
 
     if workers > 1:
-        parallelize[process](workers, workers)
+        for worker in range(workers):
+            process(worker)
     else:
         process(0)
 
@@ -350,22 +363,23 @@ def munc_variance_cross(
     var variance = fp(variance_addr)
     var workers = worker_count(n)
 
-    @parameter
+    @__parameter
     def process(worker: Int):
         var start = worker * n // workers
         var end = (worker + 1) * n // workers
         for i in range(start, end):
-            if ids_a[i] == ids_b[i]:
-                variance[i] += (
+            if ids_a[unsafe_offset=i] == ids_b[unsafe_offset=i]:
+                variance[unsafe_offset=i] += (
                     2.0
-                    * gradient_a[i]
-                    * sigma_a[i]
-                    * gradient_b[i]
-                    * sigma_b[i]
+                    * gradient_a[unsafe_offset=i]
+                    * sigma_a[unsafe_offset=i]
+                    * gradient_b[unsafe_offset=i]
+                    * sigma_b[unsafe_offset=i]
                 )
 
     if workers > 1:
-        parallelize[process](workers, workers)
+        for worker in range(workers):
+            process(worker)
     else:
         process(0)
 
@@ -376,16 +390,21 @@ def munc_std_finish(variance_addr: Int, diagonal_addr: Int, n: Int) abi("C"):
     var diagonal = fp(diagonal_addr)
     var workers = worker_count(n)
 
-    @parameter
+    @__parameter
     def process(worker: Int):
         var start = worker * n // workers
         var end = (worker + 1) * n // workers
         for i in range(start, end):
-            if abs(variance[i]) <= 1.0e-14 * diagonal[i]:
-                variance[i] = 0.0
-            variance[i] = sqrt(max(variance[i], 0.0))
+            if abs(variance[unsafe_offset=i]) <= (
+                1.0e-14 * diagonal[unsafe_offset=i]
+            ):
+                variance[unsafe_offset=i] = 0.0
+            variance[unsafe_offset=i] = sqrt(
+                max(variance[unsafe_offset=i], 0.0)
+            )
 
     if workers > 1:
-        parallelize[process](workers, workers)
+        for worker in range(workers):
+            process(worker)
     else:
         process(0)
