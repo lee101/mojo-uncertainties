@@ -95,12 +95,12 @@ Software: Python 3.13.14, NumPy 2.5.1, uncertainties 3.2.3
 
 | Case | mojo-uncertainties | uncertainties | Upstream / Mojo | Result |
 |---|---:|---:|---:|---|
-| uarray construction, 200k | 3.246 ms | 449.482 ms | 138.47x | faster |
-| independent array addition, 500k | 41.276 ms | 2389.928 ms | 57.90x | faster |
-| sin propagation, 500k | 28.556 ms | 2471.262 ms | 86.54x | faster |
-| correlated chained expression, 200k | 103.406 ms | 5185.177 ms | 50.14x | faster |
-| std_devs after x - reversed(x), 500k | 34.541 ms | 913.313 ms | 26.44x | faster |
-| scalar correlated arithmetic loop, 50k | 103.265 ms | 542.796 ms | 5.26x | faster |
+| uarray construction, 200k | 2.571 ms | 392.866 ms | 152.78x | faster |
+| independent array addition, 500k | 7.538 ms | 2370.670 ms | 314.50x | faster |
+| sin propagation, 500k | 26.568 ms | 2028.740 ms | 76.36x | faster |
+| correlated chained expression, 200k | 30.580 ms | 5346.972 ms | 174.85x | faster |
+| std_devs after x - reversed(x), 500k | 5.848 ms | 994.193 ms | 170.00x | faster |
+| scalar correlated arithmetic loop, 50k | 95.479 ms | 567.800 ms | 5.95x | faster |
 
 The large gains come from replacing upstream's per-element Python objects and
 operator calls with contiguous numeric buffers. Scalar work remains
@@ -110,7 +110,7 @@ derivative-map copies.
 
 No GPU path is included. The array kernels are streaming passes with only a
 few arithmetic operations relative to the data moved. On this machine the
-CPU kernels are already 26.44x--138.47x faster than upstream for the array
+CPU kernels are already 76.36x--314.50x faster than upstream for the array
 cases in this benchmark.
 
 ## How it works

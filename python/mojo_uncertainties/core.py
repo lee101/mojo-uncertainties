@@ -129,15 +129,17 @@ class AffineScalarFunc:
             nominal = other._nominal_value
             other_derivatives = other._derivatives
         elif isinstance(other, (int, float, np.number)):
-            nominal = float(other)
-            other_derivatives = ()
+            result = object.__new__(AffineScalarFunc)
+            result._nominal_value = self._nominal_value + float(other)
+            result._derivatives = self._derivatives.copy()
+            return result
         else:
             return NotImplemented
         derivatives = self._derivatives.copy()
-        for variable, derivative in (
-            other_derivatives.items() if other_derivatives else ()
-        ):
-            derivatives[variable] = derivatives.get(variable, 0.0) + derivative
+        for variable in other_derivatives:
+            derivatives[variable] = (
+                derivatives.get(variable, 0.0) + other_derivatives[variable]
+            )
         result = object.__new__(AffineScalarFunc)
         result._nominal_value = self._nominal_value + nominal
         result._derivatives = derivatives
@@ -150,15 +152,17 @@ class AffineScalarFunc:
             nominal = other._nominal_value
             other_derivatives = other._derivatives
         elif isinstance(other, (int, float, np.number)):
-            nominal = float(other)
-            other_derivatives = ()
+            result = object.__new__(AffineScalarFunc)
+            result._nominal_value = self._nominal_value - float(other)
+            result._derivatives = self._derivatives.copy()
+            return result
         else:
             return NotImplemented
         derivatives = self._derivatives.copy()
-        for variable, derivative in (
-            other_derivatives.items() if other_derivatives else ()
-        ):
-            derivatives[variable] = derivatives.get(variable, 0.0) - derivative
+        for variable in other_derivatives:
+            derivatives[variable] = (
+                derivatives.get(variable, 0.0) - other_derivatives[variable]
+            )
         result = object.__new__(AffineScalarFunc)
         result._nominal_value = self._nominal_value - nominal
         result._derivatives = derivatives
@@ -170,10 +174,10 @@ class AffineScalarFunc:
 
     def __mul__(self, other: Any):
         if other is self:
-            derivatives = {}
-            for variable, derivative in self._derivatives.items():
-                scaled = self._nominal_value * derivative
-                derivatives[variable] = scaled + scaled
+            derivatives = {
+                variable: 2.0 * self._nominal_value * derivative
+                for variable, derivative in self._derivatives.items()
+            }
             result = object.__new__(AffineScalarFunc)
             result._nominal_value = self._nominal_value * self._nominal_value
             result._derivatives = derivatives
